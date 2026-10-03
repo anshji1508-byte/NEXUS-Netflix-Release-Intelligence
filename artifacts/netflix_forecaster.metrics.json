@@ -1,0 +1,12 @@
+{
+  "mae": 30.858995308758733,
+  "rmse": 38.98420363155136,
+  "baseline_mae": 44.833333333333336,
+  "holdout_months": 12,
+  "rows": 8790,
+  "monthly_observations": 165,
+  "data_source": "/Users/anshjj/Library/Mobile Documents/com~apple~CloudDocs/Machine-Learning-Practice/Netflix_Forecasting/dataset.csv",
+  "trained_at_utc": "2026-10-03T14:44:54.437423+00:00",
+  "feature_count": 12,
+  "baseline_lift_pct": 31.169527192359702
+}
