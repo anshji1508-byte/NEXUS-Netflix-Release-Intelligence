@@ -214,25 +214,35 @@ def render_kpi_card(label, value, note, accent="#e50914", value_color="#ffffff")
 
 catalog, source = load_catalog(); monthly = build_monthly(catalog); features = make_features(monthly)
 artifact_path = BASE / "artifacts" / "netflix_forecaster.joblib"
-if artifact_path.exists():
-    bundle = joblib.load(artifact_path)
-    model = bundle["model"] if isinstance(bundle, dict) else bundle
-    if hasattr(model, "forecast"):
-        history_series = monthly.set_index("month")["releases"].astype(float)
-        holdout = history_series.iloc[-11:]
-        predicted = np.asarray(model.forecast(steps=len(holdout)))
-        test = pd.DataFrame({
-            "month": holdout.index,
-            "releases": holdout.to_numpy(),
-            "predicted": predicted,
-            "seasonal_naive": history_series.shift(12).iloc[-len(holdout):].to_numpy(),
-        })
+try:
+    if artifact_path.exists():
+        bundle = joblib.load(artifact_path)
+        model = bundle["model"] if isinstance(bundle, dict) else bundle
+        if hasattr(model, "forecast"):
+            history_series = monthly.set_index("month")["releases"].astype(float)
+            holdout = history_series.iloc[-11:]
+            predicted = np.asarray(model.forecast(steps=len(holdout)))
+            test = pd.DataFrame({
+                "month": holdout.index,
+                "releases": holdout.to_numpy(),
+                "predicted": predicted,
+                "seasonal_naive": history_series.shift(12).iloc[-len(holdout):].to_numpy(),
+            })
+        else:
+            valid = features.dropna(subset=FEATURES).copy(); cutoff = valid.month.max() - pd.DateOffset(months=11)
+            train = valid[valid.month < cutoff]; test = valid[valid.month >= cutoff].copy()
+            test["predicted"] = np.maximum(0, model.predict(test[FEATURES])); test["seasonal_naive"] = test["lag_12"]
+        if not "model" in locals():
+            raise RuntimeError("Model not loaded")
     else:
-        valid = features.dropna(subset=FEATURES).copy(); cutoff = valid.month.max() - pd.DateOffset(months=11)
-        train = valid[valid.month < cutoff]; test = valid[valid.month >= cutoff].copy()
-        test["predicted"] = np.maximum(0, model.predict(test[FEATURES])); test["seasonal_naive"] = test["lag_12"]
-else:
+        raise FileNotFoundError
+except Exception:
     model, train, test = fit_model(features)
+    try:
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump({"model": model}, artifact_path)
+    except Exception:
+        pass
 future = forecast_future(model, monthly)
 mae = mean_absolute_error(test.releases, test.predicted); rmse = mean_squared_error(test.releases, test.predicted)**.5; base_mae = mean_absolute_error(test.releases, test.seasonal_naive); lift = (1-mae/base_mae)*100; residual_std = float((test.releases-test.predicted).std())
 future["low"] = np.maximum(0, future.forecast-1.28*residual_std); future["high"] = future.forecast+1.28*residual_std
